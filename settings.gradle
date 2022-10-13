@@ -1,0 +1,4 @@
+include ':mylibrary'
+include ':server'
+include ':app'
+rootProject.name = "ServerDisCover"
