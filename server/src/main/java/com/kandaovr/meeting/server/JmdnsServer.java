@@ -53,75 +53,57 @@ public class JmdnsServer {
         }
         if (localPort != 0)
             PORT = localPort;
-        mExecutorService.execute(new Runnable() {
-            @Override
-            public void run() {
-                /**
-                 这个ip是手机或盒子的ip地址
-                 */
-                try {
-                    String ip = NetUtils.getLocalIpAddress();
-                    InetAddress inetAddress = InetAddress.getByName(ip);
-                    Log.i("TAG", "run: ip:" + inetAddress.getHostAddress());
-                    jmdns = JmDNS.create(inetAddress, "jmdnsSampleName");
-                    final HashMap<String, String> values = new HashMap<String, String>();
-                    values.put("test", "vlaue");
-                    values.put("isUsing", "true");
-                    jmdns.addServiceListener(REMOTE_TYPE, new ServiceListener() {
-                        @Override
-                        public void serviceAdded(ServiceEvent event) {
-                            Log.i("TAG", "serviceAdded: ");
-                        }
+        mExecutorService.execute(() -> {
+            /**
+             这个ip是手机或盒子的ip地址
+             */
+            try {
+                String ip = NetUtils.getLocalIpAddress();
+                InetAddress inetAddress = InetAddress.getByName(ip);
+                Log.i("TAG", "run: ip:" + inetAddress.getHostAddress());
+                jmdns = JmDNS.create(inetAddress, "jmdnsSampleName");
+                final HashMap<String, String> values = new HashMap<String, String>();
+                values.put("test", "vlaue");
+                values.put("isUsing", "true");
+                jmdns.addServiceListener(REMOTE_TYPE, new ServiceListener() {
+                    @Override
+                    public void serviceAdded(ServiceEvent event) {
+                        Log.i("TAG", "serviceAdded: ");
+                    }
 
-                        @Override
-                        public void serviceRemoved(ServiceEvent event) {
-                            Log.i("TAG", "serviceRemoved: ");
-                        }
+                    @Override
+                    public void serviceRemoved(ServiceEvent event) {
+                        Log.i("TAG", "serviceRemoved: ");
+                    }
 
-                        @Override
-                        public void serviceResolved(ServiceEvent event) {
-                            Log.i("TAG", "serviceResolved: ");
-                        }
-                    });
-                    mServiceInfo = ServiceInfo.create(REMOTE_TYPE, serverName, PORT, 0, 0, false, values);
-                    jmdns.registerService(mServiceInfo);
+                    @Override
+                    public void serviceResolved(ServiceEvent event) {
+                        Log.i("TAG", "serviceResolved: ");
+                    }
+                });
+                mServiceInfo = ServiceInfo.create(REMOTE_TYPE, serverName, PORT, 0, 0, false, values);
+                jmdns.registerService(mServiceInfo);
 
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            } catch (Exception e) {
+                Log.w("TAG", "start: ", e);
             }
         });
     }
 
 
     public void close() {
-        mExecutorService.execute(new Runnable() {
-            @Override
-            public void run() {
-                if (jmdns != null) {
-                    try {
-                        if (mServiceInfo != null) {
-                            jmdns.unregisterService(mServiceInfo);
-                        }
-                        jmdns.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+        mExecutorService.execute(() -> {
+            if (jmdns != null) {
+                try {
+                    if (mServiceInfo != null) {
+                        jmdns.unregisterService(mServiceInfo);
                     }
+                    jmdns.close();
+                } catch (IOException e) {
+                    Log.w("TAG", "close: ", e);
                 }
             }
         });
-    }
-
-
-    private InetAddress getLocalIpAddress(WifiManager wifiManager) throws UnknownHostException {
-        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-        int intAddr = wifiInfo.getIpAddress();
-        byte[] byteaddr = new byte[]{
-                (byte) (intAddr & 255),
-                (byte) (intAddr >> 8 & 255),
-                (byte) (intAddr >> 16 & 255),
-                (byte) (intAddr >> 24 & 255)};
-        return InetAddress.getByAddress(byteaddr);
     }
 
 }
