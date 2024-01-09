@@ -5,6 +5,9 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.util.Log;
 
+import com.kandaovr.meeting.mylibrary.NetUtils;
+
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -42,6 +45,7 @@ public class MdnsDiscover {
             }
             mSearchThread.interrupt();
         }
+        Log.i(TAG, "startSearch: ");
         mServiceName = serviceName;
         mSearchThread = new MdnsSearchThread(callback);
         mSearchThread.start();
@@ -77,38 +81,43 @@ public class MdnsDiscover {
 
         @Override
         public void run() {
+            Log.i(TAG, "run: ");
             WifiManager wifiManager = (WifiManager) mContext.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             assert wifiManager != null;
+            // wifi默认过滤多播
             WifiManager.MulticastLock multicastLock = wifiManager.createMulticastLock(getClass().getName());
             multicastLock.setReferenceCounted(false);
             multicastLock.acquire();//to receive multicast packets
             try {
                 ServiceListener listener = new JmdnsListener(mCallback);
                 boolean crash = false;
-                while (running) {
-                    try {
-                        if (crash) {
-                            Thread.sleep(3000L);
-                        }
-                        InetAddress addr = getLocalIpAddress(wifiManager);
-                        mJmdns = JmDNS.create(addr);
-                        mJmdns.addServiceListener(mServiceName, listener);
+                int netPort = 0;
+                String localIp = NetUtils.getLocalIpAddress();
+                // 不用循环查询，一次搜索所有结果
+                try {
+                    if (crash) {
                         Thread.sleep(3000L);
+                    }
+                    InetAddress localAddr = InetAddress.getByName(localIp);
+                    Log.i(TAG, "try run addr: " + localAddr);
+                    mJmdns = JmDNS.create(localAddr);
+                    mJmdns.addServiceListener(mServiceName, listener);
+                    Thread.sleep(3000L);
+                    crash = false;
+                } catch (Exception e) {
+                    Log.w(TAG, "run inner: ", e);
+                    crash = true;
+                } finally {
+                    mJmdns.removeServiceListener(mServiceName, listener);
+                    try {
+                        mJmdns.close();
+                    } catch (IOException e) {
+                        Log.w(TAG, "run inner 02: ", e);
                         crash = false;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        crash = true;
-                    } finally {
-                        mJmdns.removeServiceListener(mServiceName, listener);
-                        try {
-                            mJmdns.close();
-                            Log.i(TAG, "run: jmdns close");
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            crash = false;
-                        }
                     }
                 }
+            } catch (Exception e) {
+                Log.w(TAG, "run: ", e);
             } finally {
                 Log.i(TAG, "run: search end");
                 multicastLock.release();
@@ -141,29 +150,27 @@ public class MdnsDiscover {
         }
 
         public void serviceAdded(ServiceEvent ev) {
-            Log.i(TAG, "serviceAdded: ");
-            mJmdns.requestServiceInfo(ev.getType(), ev.getName(), 1);
+            Log.i(TAG, String.format("serviceAdded type:%s,name:%s ", ev.getType(), ev.getName()));
+//            mJmdns.requestServiceInfo(ev.getType(), ev.getName(), 1);
         }
 
         public void serviceRemoved(ServiceEvent ev) {
-            Log.i(TAG, "serviceRemoved: ");
+            Log.i(TAG, "serviceRemoved type: " + ev.getType() + " name:" + ev.getName());
             jsonMap.remove(ev.getName());
         }
 
         public void serviceResolved(ServiceEvent ev) {
-            if (!jsonMap.containsKey(ev.getName())) {
-                // 新设备
-                JSONObject jsonObj = toJsonObject(ev.getInfo());
-                Log.i(TAG, "serviceResolved: add");
-                jsonMap.put(ev.getName(), jsonObj);
-                if (mCallback != null) {
-                    if (jsonObj == null) {
-                        Log.w(TAG, "serviceResolved: jsonObj is null");
-                        return;
-                    }
-                    // 重开线程回调
-                    mCallback.onDeviceFind(jsonObj);
+            // 新设备
+            JSONObject jsonObj = toJsonObject(ev.getInfo());
+            Log.i(TAG, "serviceResolved: add");
+            if (mCallback != null) {
+                if (jsonObj == null) {
+                    Log.w(TAG, "serviceResolved: jsonObj is null");
+                    return;
                 }
+                // 重开线程回调
+                Log.i(TAG, "serviceResolved: ");
+                mCallback.onDeviceFind(jsonObj);
             }
         }
     }

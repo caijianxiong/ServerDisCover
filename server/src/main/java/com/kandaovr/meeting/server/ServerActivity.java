@@ -19,7 +19,7 @@ public class ServerActivity extends AppCompatActivity {
         findViewById(R.id.btn_Start).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                jmdnsServer.start("MyJmdnsServer");
+                jmdnsServer.start("MyJmdnsServer123456");
             }
         });
 
@@ -30,5 +30,11 @@ public class ServerActivity extends AppCompatActivity {
             }
         });
 
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        jmdnsServer.close();
     }
 }

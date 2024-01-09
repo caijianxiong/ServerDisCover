@@ -3,6 +3,9 @@ package com.kandaovr.meeting.server;
 import android.content.Context;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.util.Log;
+
+import com.kandaovr.meeting.mylibrary.NetUtils;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -13,7 +16,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.jmdns.JmDNS;
+import javax.jmdns.ServiceEvent;
 import javax.jmdns.ServiceInfo;
+import javax.jmdns.ServiceListener;
 
 public class JmdnsServer {
 
@@ -55,14 +60,33 @@ public class JmdnsServer {
                  这个ip是手机或盒子的ip地址
                  */
                 try {
-                    InetAddress ip = getLocalIpAddress(wifiManager);
-                    jmdns = JmDNS.create(ip, "jmdnsSampleName");
+                    String ip = NetUtils.getLocalIpAddress();
+                    InetAddress inetAddress = InetAddress.getByName(ip);
+                    Log.i("TAG", "run: ip:" + inetAddress.getHostAddress());
+                    jmdns = JmDNS.create(inetAddress, "jmdnsSampleName");
                     final HashMap<String, String> values = new HashMap<String, String>();
                     values.put("test", "vlaue");
+                    values.put("isUsing", "true");
+                    jmdns.addServiceListener(REMOTE_TYPE, new ServiceListener() {
+                        @Override
+                        public void serviceAdded(ServiceEvent event) {
+                            Log.i("TAG", "serviceAdded: ");
+                        }
 
-                    mServiceInfo = ServiceInfo.create(REMOTE_TYPE, serverName, PORT, 0, 0, values);
+                        @Override
+                        public void serviceRemoved(ServiceEvent event) {
+                            Log.i("TAG", "serviceRemoved: ");
+                        }
+
+                        @Override
+                        public void serviceResolved(ServiceEvent event) {
+                            Log.i("TAG", "serviceResolved: ");
+                        }
+                    });
+                    mServiceInfo = ServiceInfo.create(REMOTE_TYPE, serverName, PORT, 0, 0, false, values);
                     jmdns.registerService(mServiceInfo);
-                } catch (IOException e) {
+
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
