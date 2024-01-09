@@ -24,14 +24,14 @@ public class MainActivity extends AppCompatActivity implements MdnsCallback {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        jmdnsClient = new MdnsDiscover(this);
+
 
         findViewById(R.id.btn_Start).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Log.i(TAG, "onClick: ");
+                jmdnsClient = new MdnsDiscover(MainActivity.this);
                 jmdnsClient.startSearch(serverType, MainActivity.this);
-
             }
         });
 

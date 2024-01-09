@@ -23,7 +23,7 @@ import javax.jmdns.ServiceEvent;
 import javax.jmdns.ServiceInfo;
 import javax.jmdns.ServiceListener;
 
-public class MdnsDiscover {
+public class MdnsDiscover extends Thread {
 
     private String TAG = this.getClass().getSimpleName();
 
@@ -31,116 +31,69 @@ public class MdnsDiscover {
     private Context mContext;
     private String mServiceName;
     private JmDNS mJmdns;
-    private MdnsSearchThread mSearchThread;
     private Map<String, JSONObject> jsonMap = new HashMap<>();
+
+    private MdnsCallback mCallback;
+    private ServiceListener listener;
 
     public MdnsDiscover(Context context) {
         mContext = context;
     }
 
     public void startSearch(String serviceName, MdnsCallback callback) {
-        if (mSearchThread != null && mSearchThread.isRunning()) {
-            if (Objects.equals(mServiceName, serviceName)) {
-                return;
-            }
-            mSearchThread.interrupt();
-        }
+        mCallback = callback;
         Log.i(TAG, "startSearch: ");
         mServiceName = serviceName;
-        mSearchThread = new MdnsSearchThread(callback);
-        mSearchThread.start();
+        listener = new JmdnsListener(mCallback);
+        start();
     }
+
 
     public void stopSearch() {
         jsonMap.clear();
-        if (mSearchThread != null && mSearchThread.isRunning()) {
-            mSearchThread.interrupt();
-            mSearchThread = null;
-        }
-    }
 
-    private InetAddress getLocalIpAddress(WifiManager wifiManager) throws UnknownHostException {
-        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-        int intAddr = wifiInfo.getIpAddress();
-        byte[] byteaddr = new byte[]{
-                (byte) (intAddr & 255),
-                (byte) (intAddr >> 8 & 255),
-                (byte) (intAddr >> 16 & 255),
-                (byte) (intAddr >> 24 & 255)};
-        return InetAddress.getByAddress(byteaddr);
-    }
-
-    private class MdnsSearchThread extends Thread {
-        private MdnsCallback mCallback;
-
-        public MdnsSearchThread(MdnsCallback mCallback) {
-            this.mCallback = mCallback;
+        mJmdns.removeServiceListener(mServiceName, listener);
+        try {
+            mJmdns.close();
+            interrupt();
+        } catch (Exception e) {
+            Log.w(TAG, "run inner 02: ", e);
         }
 
-        private volatile boolean running = false;
+    }
 
-        @Override
-        public void run() {
-            Log.i(TAG, "run: ");
-            WifiManager wifiManager = (WifiManager) mContext.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            assert wifiManager != null;
-            // wifi默认过滤多播
-            WifiManager.MulticastLock multicastLock = wifiManager.createMulticastLock(getClass().getName());
-            multicastLock.setReferenceCounted(false);
-            multicastLock.acquire();//to receive multicast packets
+    @Override
+    public void run() {
+        super.run();
+
+        Log.i(TAG, "run: ");
+        WifiManager wifiManager = (WifiManager) mContext.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        assert wifiManager != null;
+        // wifi默认过滤多播
+        WifiManager.MulticastLock multicastLock = wifiManager.createMulticastLock(getClass().getName());
+        multicastLock.setReferenceCounted(false);
+        multicastLock.acquire();//to receive multicast packets
+        try {
+            int netPort = 0;
+            String localIp = NetUtils.getLocalIpAddress();
+            // 不用循环查询，一次搜索所有结果
             try {
-                ServiceListener listener = new JmdnsListener(mCallback);
-                boolean crash = false;
-                int netPort = 0;
-                String localIp = NetUtils.getLocalIpAddress();
-                // 不用循环查询，一次搜索所有结果
-                try {
-                    if (crash) {
-                        Thread.sleep(3000L);
-                    }
-                    InetAddress localAddr = InetAddress.getByName(localIp);
-                    Log.i(TAG, "try run addr: " + localAddr);
-                    mJmdns = JmDNS.create(localAddr);
-                    mJmdns.addServiceListener(mServiceName, listener);
-                    Thread.sleep(3000L);
-                    crash = false;
-                } catch (Exception e) {
-                    Log.w(TAG, "run inner: ", e);
-                    crash = true;
-                } finally {
-                    mJmdns.removeServiceListener(mServiceName, listener);
-                    try {
-                        mJmdns.close();
-                    } catch (IOException e) {
-                        Log.w(TAG, "run inner 02: ", e);
-                        crash = false;
-                    }
-                }
+                InetAddress localAddr = InetAddress.getByName(localIp);
+                Log.i(TAG, "try run addr: " + localAddr);
+                mJmdns = JmDNS.create(localAddr);
+                mJmdns.addServiceListener(mServiceName, listener);
+                Thread.sleep(3000L);
             } catch (Exception e) {
-                Log.w(TAG, "run: ", e);
-            } finally {
-                Log.i(TAG, "run: search end");
-                multicastLock.release();
+                Log.w(TAG, "run inner: ", e);
             }
-        }
-
-        @Override
-        public synchronized void start() {
-            running = true;
-            super.start();
-        }
-
-        @Override
-        public void interrupt() {
-            running = false;
-            mCallback = null;
-            super.interrupt();
-        }
-
-        public boolean isRunning() {
-            return running;
+        } catch (Exception e) {
+            Log.w(TAG, "run: ", e);
+        } finally {
+            Log.i(TAG, "run: search end");
+            multicastLock.release();
         }
     }
+
 
     private class JmdnsListener implements ServiceListener {
         private MdnsCallback mCallback;
@@ -151,7 +104,7 @@ public class MdnsDiscover {
 
         public void serviceAdded(ServiceEvent ev) {
             Log.i(TAG, String.format("serviceAdded type:%s,name:%s ", ev.getType(), ev.getName()));
-//            mJmdns.requestServiceInfo(ev.getType(), ev.getName(), 1);
+            mJmdns.requestServiceInfo(ev.getType(), ev.getName(), 1);
         }
 
         public void serviceRemoved(ServiceEvent ev) {
@@ -174,7 +127,6 @@ public class MdnsDiscover {
             }
         }
     }
-
 
     /**
      * mDNS数据格式解析
