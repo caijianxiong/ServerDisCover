@@ -55,15 +55,9 @@ public class MainActivity extends AppCompatActivity implements MdnsCallback {
 
     @Override
     public void onDeviceFind(JSONObject jsonObject) {
-        Log.i(TAG, "onDeviceFind: ");
-        try {
-            @SuppressLint("DefaultLocale") String str = String.format("onDeviceFind: %s, Ip:%s, Port:%d",
-                    jsonObject.getString("Name"), jsonObject.getString("IP"), jsonObject.getInt("Port"));
-            Log.i(TAG, "onDeviceFind:" + str);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-
+        // 子线程
+//            @SuppressLint("DefaultLocale") String str = String.format("onDeviceFind: %s, Ip:%s, Port:%d",
+//                    jsonObject.getString("Name"), jsonObject.getString("IP"), jsonObject.getInt("Port"));
+        Log.i(TAG, "onDeviceFind:" + jsonObject);
     }
 }
